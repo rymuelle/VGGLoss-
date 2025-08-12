@@ -62,7 +62,7 @@ class VGGFeatureExtractor(nn.Module):
                isinstance(layer, nn.SiLU) or \
                isinstance(layer, nn.Identity) or \
                isinstance(layer, IsotropicAct) or \
-               isinstance(layer, SurrogateLoss) or \
+               isinstance(layer, SurrogateAct) or \
                isinstance(layer, PeriodicLinearUnit) or \
                isinstance(layer, nn.Mish) or \
                isinstance(layer, Sine) or \

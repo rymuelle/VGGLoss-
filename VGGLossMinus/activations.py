@@ -44,7 +44,7 @@ def bsilu(x: torch.Tensor) -> torch.Tensor:
     return (x + 1.67) * torch.sigmoid(x) - 0.835
 
 
-class SurrogateLoss(nn.Module):
+class SurrogateAct(nn.Module):
     def __init__(self, forward_act=nn.functional.relu, backwards_act=bsilu):
         super().__init__()
         self.forward_act = forward_act
@@ -69,7 +69,7 @@ class BSiLU(nn.Module):
     
 
 activations = {
-    'ReLU_BSiLU': (SurrogateLoss, 1),
+    'ReLU_BSiLU': (SurrogateAct, 1),
     'identity': (nn.Identity, 1),
     'relu': (nn.ReLU, 1),
     'gelu': (nn.GELU, 1),
