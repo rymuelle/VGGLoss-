@@ -36,7 +36,7 @@ class Flickr8kDataset(Dataset):
         w, h = image.size
         if w < self.crop_size or h < self.crop_size:
             image = image.resize((self.crop_size, self.crop_size), Image.BICUBIC)
-
+            w, h = image.size
         if top is None or left is None:
             # Random crop image to crop size
             top = random.randint(0, h - self.crop_size)
