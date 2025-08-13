@@ -1,0 +1,30 @@
+[project]
+name = "VGGLossMinus" 
+version = "0.0.1"
+description = "A VGG variant testing library"
+authors = [
+    { name = "Ryan Mueller"},
+]
+readme = "README.md"
+requires-python = ">=3.8" 
+license = { file = "LICENSE" }
+keywords = ["python", "Machine Learning", "Perceptual Loss"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    ]
+
+
+[project.urls]
+"Homepage" = "https://github.com/rymuelle/VGGLoss-"
+"Bug Tracker" = "https://github.com/rymuelle/VGGLoss-/issues"
+
+[build-system]
+requires = ["setuptools>=61.0"] 
+build-backend = "setuptools.build_meta" 
+
+[tool.setuptools.packages.find]
+where = ["VGGLossMinus"]
