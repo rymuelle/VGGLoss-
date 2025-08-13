@@ -15,7 +15,6 @@ class Flickr8kDataset(Dataset):
         self.annotations = []
         self.images = os.listdir(self.image_dir)
         self.max_noise=0.1
-        self.seed = 42
 
     def get_data(self, dataset="adityajn105/flickr8k"):
         path = kagglehub.dataset_download(dataset)
@@ -28,20 +27,17 @@ class Flickr8kDataset(Dataset):
     
     def get_image(self, idx, top=None, left=None):
 
-        np.random.seed(self.seed) 
-
         img_name = self.images[idx]
         img_path = os.path.join(self.image_dir, img_name)
         image = Image.open(img_path).convert('RGB') 
         w, h = image.size
-        if w < self.crop_size or h < self.crop_size:
+        if w <= self.crop_size or h <= self.crop_size:
             image = image.resize((self.crop_size*2, self.crop_size*2), Image.BICUBIC)
             w, h = image.size
+
         if top is None or left is None:
             # Random crop image to crop size
-            top = random.randint(0, h - self.crop_size)
             top = np.random.randint(0, h - self.crop_size)
-            left = random.randint(0, w - self.crop_size)
             left = np.random.randint(0, w - self.crop_size)
             top = max(top, 0)
             left = max(left, 0)
