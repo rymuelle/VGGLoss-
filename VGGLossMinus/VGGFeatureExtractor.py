@@ -69,6 +69,7 @@ class VGGFeatureExtractor(nn.Module):
                isinstance(layer, Cosine) or \
                isinstance(layer, BSiLU) or \
                isinstance(layer, nn.Sigmoid) or \
+               isinstance(layer, Snake) or \
                isinstance(layer, nn.Tanh):
                 self.features[i] = activation_cls(**kwargs)
         # Update the stored factory for future reference
