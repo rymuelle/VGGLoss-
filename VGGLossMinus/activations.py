@@ -68,6 +68,15 @@ class BSiLU(nn.Module):
         return bsilu(x)
     
 
+# Snake activation
+class Snake(nn.Module):
+    def __init__(self, a=1):
+        super().__init__()
+        self.a = a
+
+    def forward(self, x):
+        return x + (1 / self.a ) * torch.sin(self.a  * x) ** 2
+
 activations = {
     'ReLU_BSiLU': (SurrogateAct, 1),
     'identity': (nn.Identity, 1),
