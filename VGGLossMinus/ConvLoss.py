@@ -20,6 +20,8 @@ class ConvLoss(nn.Module):
         self.norm = norm()
         self.loss_func = loss_func
         self.activation = activation()
+        self.conv.weight.requires_grad_(False)
+
     def run_conv(self, x):
         x = self.conv(x)
         x = self.norm(x)
@@ -205,3 +207,119 @@ def visualize_kernels(conv, num_cols=8, cmap='gray'):
         axes[i].axis('off')
     plt.tight_layout()
     plt.show()
+
+
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+from functools import partial
+
+class MultiScaleConvLoss(nn.Module):
+    def __init__(self, 
+                 in_chan=3, 
+                 scales=(3, 5, 9),    # kernel sizes for each scale
+                 out_chan=64,         # feature channels per scale
+                 norm=nn.Identity, 
+                 activation=nn.Identity,
+                 loss_func=partial(F.mse_loss, reduction='mean'),
+                 freeze_conv=False,
+                 **kwargs):
+        """
+        Multi-scale convolutional loss.
+        Args:
+            scales: tuple of kernel sizes
+            out_chan: number of output channels per scale
+            freeze_conv: if True, conv weights are frozen (fixed random)
+            norm, activation: modules or callables
+            loss_func: callable loss function taking (pred, target)
+        """
+        super().__init__()
+        
+        self.branches = nn.ModuleList()
+        for k in scales:
+            branch = nn.Sequential(
+                nn.Conv2d(in_chan, out_chan, kernel_size=k, padding=k//2, **kwargs),
+                norm(out_chan) if norm != nn.Identity else norm(),
+                activation() if activation != nn.Identity else activation()
+            )
+            if freeze_conv:
+                for p in branch[0].parameters():
+                    p.requires_grad_(False)
+            self.branches.append(branch)
+        
+        self.loss_func = loss_func
+
+    def forward(self, x1, x2):
+        total_loss = 0.0
+        for branch in self.branches:
+            f1 = branch(x1)
+            f2 = branch(x2)
+            total_loss += self.loss_func(f1, f2)
+        return total_loss / len(self.branches)
+
+
+
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+from functools import partial
+import math
+
+def make_band_kernel(size, band, bandwidth, device):
+    """
+    Create a 2D band-pass kernel in the Fourier domain and return its spatial form.
+    band: center frequency in [0, 0.5] (0 = DC, 0.5 = Nyquist)
+    bandwidth: fractional width of the band
+    """
+    # freq coords
+    fy = torch.fft.fftfreq(size, d=1.0, device=device)[:, None]
+    fx = torch.fft.fftfreq(size, d=1.0, device=device)[None, :]
+    r = torch.sqrt(fx**2 + fy**2)
+
+    # Gaussian-shaped band mask
+    sigma = bandwidth / 2.355  # convert bandwidth to Gaussian sigma
+    mask = torch.exp(-0.5 * ((r - band) / sigma)**2)
+
+    # Inverse FFT to get spatial kernel
+    kernel = torch.fft.ifft2(mask).real
+    kernel = torch.fft.fftshift(kernel)  # center in spatial domain
+    kernel = kernel / kernel.abs().sum() # normalize energy
+    return kernel.float()
+
+class FourierBandConvLoss(nn.Module):
+    def __init__(self,
+                 in_chan=3,
+                 out_chan=32,
+                 bands=((0.0, 0.15), (0.15, 0.3), (0.3, 0.5)),
+                 kernel_size=33,
+                 loss_func=partial(F.mse_loss, reduction='mean'),
+                 freeze=True):
+        """
+        Multi-band Fourier convolution loss.
+        bands: list of (center_freq, bandwidth) in normalized frequency units.
+        """
+        super().__init__()
+        self.loss_func = loss_func
+        self.branches = nn.ModuleList()
+
+        for center, bw in bands:
+            k = make_band_kernel(kernel_size, center, bw, device='cpu')
+            k = k[None, None]  # (1,1,H,W)
+            # Duplicate kernel for all input channels
+            k = k.repeat(out_chan, in_chan, 1, 1)
+            conv = nn.Conv2d(in_chan, out_chan, kernel_size,
+                             padding=kernel_size//2, bias=False)
+            with torch.no_grad():
+                conv.weight.copy_(k)
+            if freeze:
+                for p in conv.parameters():
+                    p.requires_grad_(False)
+            self.branches.append(conv)
+
+    def forward(self, x1, x2):
+        total_loss = 0.0
+        for branch in self.branches:
+            f1 = branch(x1)
+            f2 = branch(x2)
+            total_loss += self.loss_func(f1, f2)
+        return total_loss / len(self.branches)
