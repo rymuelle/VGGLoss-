@@ -3,10 +3,11 @@ import torch.nn as nn
 import torch.fft
 import matplotlib.pyplot as plt
 import math
+import copy
 
 class LRN(nn.Module):
     def forward(self, x):
-        return x/x.norm(dim=1).unsqueeze(1)
+        return x/(x.norm(dim=1).unsqueeze(1)+1e-3)
 
 class ConvLoss(nn.Module):
     def __init__(self, in_chan=3, out_chan=150, kernel_size=3, 
@@ -123,9 +124,8 @@ def init_conv_fourier_mode(conv):
             # Complex exponential in spatial domain (real part is cosine pattern)
             kernel = torch.cos(2 * math.pi * (fx * u / H + fy * v / W))
 
-            # Normalize to unit variance
             kernel -= kernel.mean()
-            kernel /= kernel.norm()
+            kernel /= kernel.std()
 
             # Assign to correct (out, in) location
             out_ch = idx // C_in
@@ -143,7 +143,7 @@ def visualize_kernels_color(conv, num_cols=8, cmap='gray'):
     Assumes shape (C_out, C_in, H, W).
     Displays only the first input channel for clarity.
     """
-    weights = conv.weight.detach().cpu()
+    weights =  copy.deepcopy(conv.weight.detach().cpu())
     C_out, C_in, H, W = weights.shape
     fig, axes = plt.subplots(
         math.ceil(C_out / num_cols), num_cols,
@@ -166,7 +166,7 @@ def visualize_kernels(conv, num_cols=8, cmap='gray'):
     Assumes shape (C_out, C_in, H, W).
     Displays only the first input channel for clarity.
     """
-    weights = conv.weight.detach().cpu()
+    weights = copy.deepcopy(conv.weight.detach().cpu())
     C_out, C_in, H, W = weights.shape
     fig, axes = plt.subplots(
         math.ceil(C_out / num_cols), num_cols,
