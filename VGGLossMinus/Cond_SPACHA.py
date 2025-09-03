@@ -181,7 +181,6 @@ class SPACHABlock(nn.Module):
 
         #Spatial Mixing
         x = self.LKA(x)
-        x = x * self.sca(x, cond)
         x = self.conv1(x)
         x = self.dropout1(x)
         y = inp + x * self.beta
@@ -189,6 +188,7 @@ class SPACHABlock(nn.Module):
         # Channel Mixing
         x = self.conv2(self.norm2(y))
         x = self.sg(x)
+        x = x * self.sca(x, cond)
         x = self.conv3(x)
         x = self.dropout2(x)
 
