@@ -176,6 +176,7 @@ class SPACHABlock(nn.Module):
         # self.grn = GRN(ffn_channel // 2)
 
         self.norm1 = LayerNorm2d(c)
+        self.norm2 = LayerNorm2d(c)
 
         self.dropout1 = (
             nn.Dropout(drop_out_rate) if drop_out_rate > 0.0 else nn.Identity()
@@ -195,16 +196,13 @@ class SPACHABlock(nn.Module):
         x = self.norm1(x)
 
         #Spatial Mixing
-        # x = self.conv1(x)
-        # chunk1, chunk2 = interleaved_chunk(x)
-        # x = chunk1 * chunk2
         x = self.LKA(x)
         x = self.conv1(x)
         x = self.dropout1(x)
         y = inp + x * self.beta
         
         # Channel Mixing
-        x = self.conv2(y)
+        x = self.conv2(self.norm2(y))
         x = self.sg(x)
         x = x * self.sca(x, cond)
         x = self.conv3(x)
