@@ -136,16 +136,16 @@ class SPACHABlock(nn.Module):
             groups=c // 16,
             bias=True,
         )
-        self.LKA = LKA(c)
-        # self.LKA =  nn.Conv2d(
-        #     in_channels=c,
-        #     out_channels=c,
-        #     kernel_size=3,
-        #     padding=1,
-        #     stride=1,
-        #     groups=c,
-        #     bias=True,
-        # )
+        # self.LKA = LKA(c)
+        self.LKA =  nn.Conv2d(
+            in_channels=c,
+            out_channels=c,
+            kernel_size=3,
+            padding=1,
+            stride=1,
+            groups=c,
+            bias=True,
+        )
 
         # Simplified Channel Attention
         self.sca = ConditionedChannelAttention(dw_channel // 2, cond_chans)
