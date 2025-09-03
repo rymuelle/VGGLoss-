@@ -180,7 +180,7 @@ class SPACHABlock(nn.Module):
         x = self.norm1(x)
 
         #Spatial Mixing
-        x = self.LKA(x)
+        #x = self.LKA(x)
         x = self.conv1(x)
         x = self.dropout1(x)
         y = inp + x * self.beta
