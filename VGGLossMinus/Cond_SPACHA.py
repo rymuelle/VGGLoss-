@@ -127,17 +127,17 @@ class SPACHABlock(nn.Module):
         super().__init__()
         dw_channel = c * DW_Expand
 
-        self.conv1 = nn.Conv2d(
-            in_channels=c,
-            out_channels=c * 2,
-            kernel_size=3,
-            padding=1,
-            stride=1,
-            groups=c // 16,
-            bias=True,
-        )
-        # self.LKA = LKA(c)
-        self.LKA =  nn.Conv2d(
+        # self.conv1 = nn.Conv2d(
+        #     in_channels=c,
+        #     out_channels=c * 2,
+        #     kernel_size=3,
+        #     padding=1,
+        #     stride=1,
+        #     groups=c // 16,
+        #     bias=True,
+        # )
+        self.LKA = LKA(c)
+        self.conv1 =  nn.Conv2d(
             in_channels=c,
             out_channels=c,
             kernel_size=3,
@@ -195,10 +195,11 @@ class SPACHABlock(nn.Module):
         x = self.norm1(x)
 
         #Spatial Mixing
-        x = self.conv1(x)
-        chunk1, chunk2 = interleaved_chunk(x)
-        x = chunk1 * chunk2
+        # x = self.conv1(x)
+        # chunk1, chunk2 = interleaved_chunk(x)
+        # x = chunk1 * chunk2
         x = self.LKA(x)
+        x = self.conv1(x)
         x = self.dropout1(x)
         y = inp + x * self.beta
         
