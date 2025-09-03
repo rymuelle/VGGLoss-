@@ -63,12 +63,6 @@ class ConditionedChannelAttention(nn.Module):
     def __init__(self, dims, cat_dims):
         super().__init__()
         in_dim = dims + cat_dims
-        # self.mlp = nn.Sequential(
-        #     nn.Linear(in_dim, int(in_dim*1.5)),
-        #     nn.GELU(),
-        #     nn.Dropout(0.2),
-        #     nn.Linear(int(in_dim*1.5), dims)
-        # )
         self.mlp = nn.Sequential(nn.Linear(in_dim, dims))
         self.pool = nn.AdaptiveAvgPool2d(1)
 
@@ -79,8 +73,7 @@ class ConditionedChannelAttention(nn.Module):
         cat_channels = cat_channels.permute(0, 2, 3, 1)
         ca = self.mlp(cat_channels).permute(0, 3, 1, 2)
 
-        return ca
-    
+        return ca 
 
 class LKA(nn.Module):
     def __init__(self, dim):
@@ -127,15 +120,6 @@ class SPACHABlock(nn.Module):
         super().__init__()
         dw_channel = c * DW_Expand
 
-        # self.conv1 = nn.Conv2d(
-        #     in_channels=c,
-        #     out_channels=c * 2,
-        #     kernel_size=3,
-        #     padding=1,
-        #     stride=1,
-        #     groups=c // 16,
-        #     bias=True,
-        # )
         self.LKA = LKA(c)
         self.conv1 =  nn.Conv2d(
             in_channels=c,
@@ -197,6 +181,7 @@ class SPACHABlock(nn.Module):
 
         #Spatial Mixing
         x = self.LKA(x)
+        x = x * self.sca(x, cond)
         x = self.conv1(x)
         x = self.dropout1(x)
         y = inp + x * self.beta
@@ -204,7 +189,6 @@ class SPACHABlock(nn.Module):
         # Channel Mixing
         x = self.conv2(self.norm2(y))
         x = self.sg(x)
-        x = x * self.sca(x, cond)
         x = self.conv3(x)
         x = self.dropout2(x)
 
