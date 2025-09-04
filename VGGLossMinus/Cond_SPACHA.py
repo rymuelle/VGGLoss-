@@ -75,42 +75,29 @@ class ConditionedChannelAttention(nn.Module):
 
         return ca 
 
-class LKA(nn.Module):
-    def __init__(self, dim):
+class NKA(nn.Module):
+    def __init__(self, dim, channel_reduction = 8):
         super().__init__()
-        # Point-wise convolution to reduce channels
-        self.proj_1 = nn.Conv2d(dim, dim // 8, 1, 1, 0)
-        
-        # Decomposed large kernel convolution
-        # Step 1: Small kernel depth-wise convolution for local features
-        self.dwconv = nn.Conv2d(dim // 8, dim // 8, 5, 1, 2, groups=dim // 8)
-        
-        # Step 2: Dilated depth-wise convolution for long-range dependencies
-        # The key to the large receptive field is the dilation.
-        # Kernel size 7x7 with dilation 3, receptive field becomes (7-1)*3+1 = 19
-        self.dwdconv = nn.Conv2d(dim // 8, dim // 8, 7, 1, 9, groups=dim // 8, dilation=3)
-        
-        # Step 3: Point-wise convolution to fuse channels and create the attention map
-        self.proj_2 = nn.Conv2d(dim // 8, dim * 2, 1, 1, 0)
+
+        reduced_channels = dim // channel_reduction
+        self.proj_1 = nn.Conv2d(dim, reduced_channels, 1, 1, 0)
+        self.dwconv = nn.Conv2d(reduced_channels, reduced_channels, 3, 1, 1, groups=reduced_channels)
+        self.proj_2 = nn.Conv2d(reduced_channels, dim * 2, 1, 1, 0)
         self.sg = SimpleGate()
-        # This is a common part of attention mechanisms
-        # It's an optional final point-wise conv and element-wise product.
         self.attention = nn.Conv2d(dim, dim, 1, 1, 0)
         
     def forward(self, x):
         B, C, H, W = x.shape
-        
         # First projection to a smaller dimension
         y = self.proj_1(x)
-        
-        # The core LKA operations
+        # DW conv
         attn = self.dwconv(y)
-        attn = self.dwdconv(attn)
+        # PW back to orignal space
         attn = self.proj_2(attn)
+        # Non-linearity
         attn = self.sg(attn)
-        # Applying the attention map
+        # Apply attention map
         out = x * self.attention(attn)
-        
         return out
 
 
@@ -120,7 +107,7 @@ class SPACHABlock(nn.Module):
         super().__init__()
         dw_channel = c * DW_Expand
 
-        self.LKA = LKA(c)
+        self.NKA = NKA(c)
         self.conv1 =  nn.Conv2d(
             in_channels=c,
             out_channels=c,
@@ -180,7 +167,7 @@ class SPACHABlock(nn.Module):
         x = self.norm1(x)
 
         #Spatial Mixing
-        x = self.LKA(x)
+        x = self.NKA(x)
         x = self.conv1(x)
         x = self.dropout1(x)
         y = inp + x * self.beta
