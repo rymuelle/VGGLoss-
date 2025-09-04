@@ -2,6 +2,15 @@ import torch.nn.functional as F
 import torch
 import torch.nn as nn
 
+def interleaved_chunk(x):
+    B, C, W, H = x.shape
+
+    y = x.view(B, C // 2, 2, W, H)
+
+    chunk1 = y[:, :, 0, :, :]
+    chunk2 = y[:, :, 1, :, :]  
+    return chunk1, chunk2
+
 class LayerNormFunction(torch.autograd.Function):
     @staticmethod
     def forward(ctx, x, weight, bias, eps):
@@ -54,12 +63,6 @@ class ConditionedChannelAttention(nn.Module):
     def __init__(self, dims, cat_dims):
         super().__init__()
         in_dim = dims + cat_dims
-        # self.mlp = nn.Sequential(
-        #     nn.Linear(in_dim, int(in_dim*1.5)),
-        #     nn.GELU(),
-        #     nn.Dropout(0.2),
-        #     nn.Linear(int(in_dim*1.5), dims)
-        # )
         self.mlp = nn.Sequential(nn.Linear(in_dim, dims))
         self.pool = nn.AdaptiveAvgPool2d(1)
 
@@ -70,15 +73,55 @@ class ConditionedChannelAttention(nn.Module):
         cat_channels = cat_channels.permute(0, 2, 3, 1)
         ca = self.mlp(cat_channels).permute(0, 3, 1, 2)
 
-        return ca
-    
+        return ca 
 
-class NAFBlock0(nn.Module):
+class LKA(nn.Module):
+    def __init__(self, dim):
+        super().__init__()
+        # Point-wise convolution to reduce channels
+        self.proj_1 = nn.Conv2d(dim, dim // 8, 1, 1, 0)
+        
+        # Decomposed large kernel convolution
+        # Step 1: Small kernel depth-wise convolution for local features
+        self.dwconv = nn.Conv2d(dim // 8, dim // 8, 5, 1, 2, groups=dim // 8)
+        
+        # Step 2: Dilated depth-wise convolution for long-range dependencies
+        # The key to the large receptive field is the dilation.
+        # Kernel size 7x7 with dilation 3, receptive field becomes (7-1)*3+1 = 19
+        self.dwdconv = nn.Conv2d(dim // 8, dim // 8, 7, 1, 9, groups=dim // 8, dilation=3)
+        
+        # Step 3: Point-wise convolution to fuse channels and create the attention map
+        self.proj_2 = nn.Conv2d(dim // 8, dim * 2, 1, 1, 0)
+        self.sg = SimpleGate()
+        # This is a common part of attention mechanisms
+        # It's an optional final point-wise conv and element-wise product.
+        self.attention = nn.Conv2d(dim, dim, 1, 1, 0)
+        
+    def forward(self, x):
+        B, C, H, W = x.shape
+        
+        # First projection to a smaller dimension
+        y = self.proj_1(x)
+        
+        # The core LKA operations
+        attn = self.dwconv(y)
+        attn = self.dwdconv(attn)
+        attn = self.proj_2(attn)
+        attn = self.sg(attn)
+        # Applying the attention map
+        out = x * self.attention(attn)
+        
+        return out
+
+
+
+class SPACHABlock(nn.Module):
     def __init__(self, c, DW_Expand=2, FFN_Expand=2, drop_out_rate=0.0, cond_chans=0):
         super().__init__()
         dw_channel = c * DW_Expand
 
-        self.conv1 = nn.Conv2d(
+        self.LKA = LKA(c)
+        self.conv1 =  nn.Conv2d(
             in_channels=c,
             out_channels=c,
             kernel_size=3,
@@ -117,6 +160,7 @@ class NAFBlock0(nn.Module):
         # self.grn = GRN(ffn_channel // 2)
 
         self.norm1 = LayerNorm2d(c)
+        self.norm2 = LayerNorm2d(c)
 
         self.dropout1 = (
             nn.Dropout(drop_out_rate) if drop_out_rate > 0.0 else nn.Identity()
@@ -126,6 +170,7 @@ class NAFBlock0(nn.Module):
         )
 
         self.beta = nn.Parameter(torch.zeros((1, c, 1, 1)), requires_grad=True)
+        self.gamma = nn.Parameter(torch.zeros((1, c, 1, 1)), requires_grad=True)
 
     def forward(self, input):
         inp = input[0]
@@ -134,16 +179,22 @@ class NAFBlock0(nn.Module):
         x = inp
         x = self.norm1(x)
 
+        #Spatial Mixing
+        x = self.LKA(x)
         x = self.conv1(x)
-        x = self.conv2(x)
+        x = self.dropout1(x)
+        y = inp + x * self.beta
+        
+        # Channel Mixing
+        x = self.conv2(self.norm2(y))
         x = self.sg(x)
         x = x * self.sca(x, cond)
         x = self.conv3(x)
-        x = self.dropout1(x)
+        x = self.dropout2(x)
 
-        return (inp + x * self.beta, cond)
+        return (y + x * self.gamma, cond)
     
-class NAFMinus(nn.Module):
+class SPACHA_LA(nn.Module):
     def __init__(
         self,
         in_channels=3,
@@ -197,7 +248,7 @@ class NAFMinus(nn.Module):
             self.encoders.append(
                 nn.Sequential(
                     *[
-                        NAFBlock0(chan, cond_chans=cond_output, drop_out_rate=drop_out_rate)
+                        SPACHABlock(chan, cond_chans=cond_output, drop_out_rate=drop_out_rate)
                         for _ in range(num)
                     ]
                 )
@@ -208,7 +259,7 @@ class NAFMinus(nn.Module):
 
         self.middle_blks = nn.Sequential(
             *[
-                NAFBlock0(chan, cond_chans=cond_output, drop_out_rate=drop_out_rate)
+                SPACHABlock(chan, cond_chans=cond_output, drop_out_rate=drop_out_rate)
                 for _ in range(middle_blk_num)
             ]
         )
@@ -225,7 +276,7 @@ class NAFMinus(nn.Module):
             self.decoders.append(
                 nn.Sequential(
                     *[
-                        NAFBlock0(chan, cond_chans=cond_output, drop_out_rate=drop_out_rate)
+                        SPACHABlock(chan, cond_chans=cond_output, drop_out_rate=drop_out_rate)
                         for _ in range(num)
                     ]
                 )
