@@ -91,8 +91,8 @@ class LKA(nn.Module):
         self.dwdconv = nn.Conv2d(dim // 8, dim // 8, 7, 1, 9, groups=dim // 8, dilation=3)
         
         # Step 3: Point-wise convolution to fuse channels and create the attention map
-        self.proj_2 = nn.Conv2d(dim // 8, dim, 1, 1, 0)
-        
+        self.proj_2 = nn.Conv2d(dim // 8, dim * 2, 1, 1, 0)
+        self.sg = SimpleGate()
         # This is a common part of attention mechanisms
         # It's an optional final point-wise conv and element-wise product.
         self.attention = nn.Conv2d(dim, dim, 1, 1, 0)
@@ -107,7 +107,7 @@ class LKA(nn.Module):
         attn = self.dwconv(y)
         attn = self.dwdconv(attn)
         attn = self.proj_2(attn)
-        
+        attn = self.sg(attn)
         # Applying the attention map
         out = x * self.attention(attn)
         
