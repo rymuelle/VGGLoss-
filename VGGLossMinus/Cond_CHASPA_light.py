@@ -53,6 +53,50 @@ class LayerNorm2d(nn.Module):
         return LayerNormFunction.apply(x, self.weight, self.bias, self.eps)
 
 
+
+class FastLayerNorm2d(nn.Module):
+    """
+    The fast and correct way to implement LayerNorm2d.
+    This uses nn.GroupNorm with 1 group, which is mathematically
+    equivalent and uses a highly optimized native implementation.
+    """
+    def __init__(self, channels, eps=1e-6):
+        super().__init__()
+        # The learnable parameters (weight and bias) are handled inside GroupNorm.
+        # They are of shape (channels,).
+        self.gn = nn.GroupNorm(1, channels, eps=eps)
+
+    def forward(self, x):
+        return self.gn(x)
+    
+class RMSNorm2d(nn.Module):
+    def __init__(self, num_channels, eps=1e-8, affine=True):
+        """
+        Root Mean Square Normalization for 2D feature maps.
+        Args:
+            num_channels: number of channels (C)
+            eps: numerical stability constant
+            affine: whether to include learnable scale and bias per channel
+        """
+        super().__init__()
+        self.eps = eps
+        self.affine = affine
+        if affine:
+            self.weight = nn.Parameter(torch.ones(1, num_channels, 1, 1))
+            self.bias = nn.Parameter(torch.zeros(1, num_channels, 1, 1))
+        else:
+            self.register_parameter("weight", None)
+            self.register_parameter("bias", None)
+
+    def forward(self, x):
+        # Compute RMS over channel dimension only
+        rms = x.pow(2).mean(dim=1, keepdim=True).sqrt()
+        x = x / (rms + self.eps)
+
+        if self.affine:
+            x = x * self.weight + self.bias
+        return x
+
 class SimpleGate(nn.Module):
     def forward(self, x):
         x1, x2 = x.chunk(2, dim=1)
@@ -146,8 +190,8 @@ class CHASPABlock(nn.Module):
 
         # self.grn = GRN(ffn_channel // 2)
 
-        self.norm1 = LayerNorm2d(c)
-        self.norm2 = LayerNorm2d(c)
+        self.norm1 = nn.GroupNorm(1, c) #LayerNorm2d(c)
+        #self.norm2 = nn.GroupNorm(1, c) #LayerNorm2d(c)
 
         self.dropout1 = (
             nn.Dropout(drop_out_rate) if drop_out_rate > 0.0 else nn.Identity()
@@ -175,14 +219,14 @@ class CHASPABlock(nn.Module):
         y = inp + x * self.beta
 
         #Spatial Mixing
-        x = self.NKA(self.norm2(y))
+        x = self.NKA(y)
         x = self.conv1(x)
         x = self.dropout1(x)
         
 
         return (y + x * self.gamma, cond)
     
-class CHASPA(nn.Module):
+class CHASPA_light(nn.Module):
     def __init__(
         self,
         in_channels=3,
