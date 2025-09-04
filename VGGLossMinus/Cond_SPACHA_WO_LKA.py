@@ -180,7 +180,7 @@ class SPACHABlock(nn.Module):
         x = self.norm1(x)
 
         #Spatial Mixing
-        x = self.LKA(x)
+        #x = self.LKA(x)
         x = self.conv1(x)
         x = self.dropout1(x)
         y = inp + x * self.beta
@@ -194,7 +194,7 @@ class SPACHABlock(nn.Module):
 
         return (y + x * self.gamma, cond)
     
-class SPACHA(nn.Module):
+class SPACHA_WO_LKA(nn.Module):
     def __init__(
         self,
         in_channels=3,
