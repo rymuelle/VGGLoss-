@@ -126,9 +126,9 @@ class NKA(nn.Module):
         reduced_channels = dim // channel_reduction
         self.proj_1 = nn.Conv2d(dim, reduced_channels, 1, 1, 0)
         self.dwconv = nn.Conv2d(reduced_channels, reduced_channels, 3, 1, 1, groups=reduced_channels)
-        self.proj_2 = nn.Conv2d(reduced_channels, dim * 2, 1, 1, 0)
+        self.proj_2 = nn.Conv2d(reduced_channels, reduced_channels * 2, 1, 1, 0)
         self.sg = SimpleGate()
-        self.attention = nn.Conv2d(dim, dim, 1, 1, 0)
+        self.attention = nn.Conv2d(reduced_channels, dim, 1, 1, 0)
         
     def forward(self, x):
         B, C, H, W = x.shape
@@ -190,7 +190,7 @@ class CHASPABlock(nn.Module):
 
         # self.grn = GRN(ffn_channel // 2)
 
-        self.norm1 = LayerNorm2d(c) #nn.GroupNorm(1, c) #LayerNorm2d(c)
+        self.norm1 = nn.GroupNorm(1, c) #nn.GroupNorm(1, c) #LayerNorm2d(c)
         #self.norm2 = nn.GroupNorm(1, c) #LayerNorm2d(c)
 
         self.dropout1 = (
