@@ -170,18 +170,18 @@ class SPACHABlock(nn.Module):
         x = self.NKA(x)
         x = self.conv1(x)
         x = self.dropout1(x)
-        y = inp + x * self.beta
+        # y = inp + x * self.beta
         
-        # Channel Mixing
-        x = self.conv2(self.norm2(y))
-        x = self.sg(x)
-        x = x * self.sca(x, cond)
-        x = self.conv3(x)
-        x = self.dropout2(x)
+        # # Channel Mixing
+        # x = self.conv2(self.norm2(y))
+        # x = self.sg(x)
+        # x = x * self.sca(x, cond)
+        # x = self.conv3(x)
+        # x = self.dropout2(x)
 
-        return (y + x * self.gamma, cond)
+        return (inp + x * self.gamma, cond)
     
-class SPACHA(nn.Module):
+class SPA(nn.Module):
     def __init__(
         self,
         in_channels=3,
