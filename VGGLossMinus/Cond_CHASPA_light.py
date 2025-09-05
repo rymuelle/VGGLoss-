@@ -190,8 +190,8 @@ class CHASPABlock(nn.Module):
 
         # self.grn = GRN(ffn_channel // 2)
 
-        self.norm1 = nn.GroupNorm(1, c) #nn.GroupNorm(1, c) #LayerNorm2d(c)
-        self.norm2 = nn.GroupNorm(1, c) #LayerNorm2d(c)
+        self.norm1 = LayerNorm2d(c)
+        self.norm2 = LayerNorm2d(c)
 
         self.dropout1 = (
             nn.Dropout(drop_out_rate) if drop_out_rate > 0.0 else nn.Identity()
