@@ -325,7 +325,7 @@ class CHASPA_light(nn.Module):
         inp = self.check_image_size(inp)
 
         x = self.intro(inp)
-
+        intro = x
         encs = []
         for encoder, down in zip(self.encoders, self.downs):
             x = encoder((x, cond))[0]
@@ -339,9 +339,9 @@ class CHASPA_light(nn.Module):
             x = x + enc_skip
             x = decoder((x, cond))[0]
 
+        x = x + intro
         x = self.ending(x)
-        # x = x + inp
-
+    
         return x[:, :, :H, :W]
 
     def check_image_size(self, x):
