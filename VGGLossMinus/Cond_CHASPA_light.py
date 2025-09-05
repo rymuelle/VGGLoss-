@@ -397,7 +397,7 @@ class CHASPA_light(nn.Module):
 
         self.middle_blks = nn.Sequential(
             *[
-                CHASPAMBlock(chan, cond_chans=cond_output, drop_out_rate=drop_out_rate)
+                CHASPABlock(chan, cond_chans=cond_output, drop_out_rate=drop_out_rate)
                 for _ in range(middle_blk_num)
             ]
         )
