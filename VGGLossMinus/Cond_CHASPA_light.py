@@ -144,6 +144,31 @@ class NKA(nn.Module):
         out = x * self.attention(attn)
         return out
 
+class LKA(nn.Module):
+    def __init__(self, dim, channel_reduction = 8):
+        super().__init__()
+
+        reduced_channels = dim // channel_reduction
+        self.proj_1 = nn.Conv2d(dim, reduced_channels, 1, 1, 0)
+        self.dwconv = nn.Conv2d(reduced_channels, reduced_channels, 7, 1, 3, groups=reduced_channels)
+        self.proj_2 = nn.Conv2d(reduced_channels, reduced_channels * 2, 1, 1, 0)
+        self.sg = SimpleGate()
+        self.attention = nn.Conv2d(reduced_channels, dim, 1, 1, 0)
+        
+    def forward(self, x):
+        B, C, H, W = x.shape
+        # First projection to a smaller dimension
+        y = self.proj_1(x)
+        # DW conv
+        attn = self.dwconv(y)
+        # PW back to orignal space
+        attn = self.proj_2(attn)
+        # Non-linearity
+        attn = self.sg(attn)
+        # Apply attention map
+        out = x * self.attention(attn)
+        return out
+
 
 
 class CHASPABlock(nn.Module):
@@ -226,6 +251,87 @@ class CHASPABlock(nn.Module):
 
         return (y + x * self.gamma, cond)
     
+
+class CHASPAMBlock(nn.Module):
+    def __init__(self, c, DW_Expand=2, FFN_Expand=2, drop_out_rate=0.0, cond_chans=0):
+        super().__init__()
+        dw_channel = c * DW_Expand
+
+        self.LKA = LKA(c)
+        self.conv1 =  nn.Conv2d(
+            in_channels=c,
+            out_channels=c,
+            kernel_size=3,
+            padding=1,
+            stride=1,
+            groups=c,
+            bias=True,
+        )
+
+        # Simplified Channel Attention
+        self.sca = ConditionedChannelAttention(dw_channel // 2, cond_chans)
+
+        # SimpleGate
+        self.sg = SimpleGate()
+
+        ffn_channel = FFN_Expand * c
+        self.conv2 = nn.Conv2d(
+            in_channels=c,
+            out_channels=ffn_channel,
+            kernel_size=1,
+            padding=0,
+            stride=1,
+            groups=1,
+            bias=True,
+        )
+        self.conv3 = nn.Conv2d(
+            in_channels=ffn_channel // 2,
+            out_channels=c,
+            kernel_size=1,
+            padding=0,
+            stride=1,
+            groups=1,
+            bias=True,
+        )
+
+        # self.grn = GRN(ffn_channel // 2)
+
+        self.norm1 = LayerNorm2d(c)
+        self.norm2 = LayerNorm2d(c)
+
+        self.dropout1 = (
+            nn.Dropout(drop_out_rate) if drop_out_rate > 0.0 else nn.Identity()
+        )
+        self.dropout2 = (
+            nn.Dropout(drop_out_rate) if drop_out_rate > 0.0 else nn.Identity()
+        )
+
+        self.beta = nn.Parameter(torch.zeros((1, c, 1, 1)), requires_grad=True)
+        self.gamma = nn.Parameter(torch.zeros((1, c, 1, 1)), requires_grad=True)
+
+    def forward(self, input):
+        inp = input[0]
+        cond = input[1]
+
+        x = inp
+        x = self.norm1(x)
+
+        # Channel Mixing
+        x = self.conv2(x)
+        x = self.sg(x)
+        x = x * self.sca(x, cond)
+        x = self.conv3(x)
+        x = self.dropout2(x)
+        y = inp + x * self.beta
+
+        #Spatial Mixing
+        x = self.LKA(self.norm2(y))
+        x = self.conv1(x)
+        x = self.dropout1(x)
+        
+
+        return (y + x * self.gamma, cond)
+    
 class CHASPA_light(nn.Module):
     def __init__(
         self,
@@ -291,7 +397,7 @@ class CHASPA_light(nn.Module):
 
         self.middle_blks = nn.Sequential(
             *[
-                CHASPABlock(chan, cond_chans=cond_output, drop_out_rate=drop_out_rate)
+                CHASPAMBlock(chan, cond_chans=cond_output, drop_out_rate=drop_out_rate)
                 for _ in range(middle_blk_num)
             ]
         )
