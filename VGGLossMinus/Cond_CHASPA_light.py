@@ -251,65 +251,6 @@ class CHASPABlock(nn.Module):
 
         return (y + x * self.gamma, cond)
     
-
-class CHASPAMBlock(nn.Module):
-    def __init__(self, c, DW_Expand=2, FFN_Expand=2, drop_out_rate=0.0, cond_chans=0):
-        super().__init__()
-        dw_channel = c * DW_Expand
-
-        self.LKA = LKA(c)
-        self.conv1 =  nn.Conv2d(
-            in_channels=c,
-            out_channels=c,
-            kernel_size=3,
-            padding=1,
-            stride=1,
-            groups=c,
-            bias=True,
-        )
-
-        # Simplified Channel Attention
-        self.sca = ConditionedChannelAttention(dw_channel // 2, cond_chans)
-
-        # SimpleGate
-        self.sg = SimpleGate()
-
-        ffn_channel = FFN_Expand * c
-        self.conv2 = nn.Conv2d(
-            in_channels=c,
-            out_channels=ffn_channel,
-            kernel_size=1,
-            padding=0,
-            stride=1,
-            groups=1,
-            bias=True,
-        )
-        self.conv3 = nn.Conv2d(
-            in_channels=ffn_channel // 2,
-            out_channels=c,
-            kernel_size=1,
-            padding=0,
-            stride=1,
-            groups=1,
-            bias=True,
-        )
-
-        # self.grn = GRN(ffn_channel // 2)
-
-        self.norm1 = LayerNorm2d(c)
-        self.norm2 = LayerNorm2d(c)
-
-        self.dropout1 = (
-            nn.Dropout(drop_out_rate) if drop_out_rate > 0.0 else nn.Identity()
-        )
-        self.dropout2 = (
-            nn.Dropout(drop_out_rate) if drop_out_rate > 0.0 else nn.Identity()
-        )
-
-        self.beta = nn.Parameter(torch.zeros((1, c, 1, 1)), requires_grad=True)
-        self.gamma = nn.Parameter(torch.zeros((1, c, 1, 1)), requires_grad=True)
-
-    def forward(self, input):
         inp = input[0]
         cond = input[1]
 
@@ -331,7 +272,18 @@ class CHASPAMBlock(nn.Module):
         
 
         return (y + x * self.gamma, cond)
-    
+
+class Fuser(nn.Module):
+    def __init__(self, chan):
+        super().__init__()
+        self.pwconv = nn.Conv2d(chan * 2, chan * 2, 1, 1, 0)
+        self.sg = SimpleGate()
+    def forward(self, x1, x2):
+        x = torch.cat([x1, x2], dim=1)
+        x = self.pwconv(x)
+        x = self.sg(x)
+        return x
+
 class CHASPA_light(nn.Module):
     def __init__(
         self,
@@ -375,6 +327,7 @@ class CHASPA_light(nn.Module):
 
         self.encoders = nn.ModuleList()
         self.decoders = nn.ModuleList()
+        self.fusers = nn.ModuleList()
         self.middles = nn.ModuleList()
         self.ups = nn.ModuleList()
         self.downs = nn.ModuleList()
@@ -416,6 +369,7 @@ class CHASPA_light(nn.Module):
                 )
             )
             
+            
 
 
         for i in range(len(dec_blk_nums)):
@@ -427,6 +381,7 @@ class CHASPA_light(nn.Module):
             )
             drop_out_rate -= drop_out_rate_increment 
             chan = chan // 2
+            self.fusers.append(Fuser(chan))
             self.decoders.append(
                 nn.Sequential(
                     *[
@@ -462,10 +417,11 @@ class CHASPA_light(nn.Module):
             mids.append(middles((x, cond))[0])
 
 
-        for decoder, up, enc_skip, mid_skip in zip(self.decoders, self.ups, encs[::-1], mids[::-1]):
+        for decoder, fuser, up, enc_skip, mid_skip in zip(self.decoders, self.fusers, self.ups, encs[::-1], mids[::-1]):
             x = x + mid_skip
             x = up(x)
-            x = x + enc_skip
+            x = fuser(x, enc_skip)
+            #x = x + enc_skip
             x = decoder((x, cond))[0]
 
         x = x + intro
