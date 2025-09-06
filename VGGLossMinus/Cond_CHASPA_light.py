@@ -338,7 +338,7 @@ class CHASPA_light(nn.Module):
         in_channels=3,
         out_channels=3,
         width=16,
-        middle_blk_num=1,
+        mid_blk_nums=[],
         enc_blk_nums=[],
         dec_blk_nums=[],
         cond_input=1,
@@ -375,7 +375,7 @@ class CHASPA_light(nn.Module):
 
         self.encoders = nn.ModuleList()
         self.decoders = nn.ModuleList()
-        self.middle_blks = nn.ModuleList()
+        self.middles = nn.ModuleList()
         self.ups = nn.ModuleList()
         self.downs = nn.ModuleList()
 
@@ -394,13 +394,18 @@ class CHASPA_light(nn.Module):
             drop_out_rate += drop_out_rate_increment 
             self.downs.append(nn.Conv2d(chan, 2 * chan, 2, 2))
             chan = chan * 2
+            # Bottle Neck Blocks
+            num = mid_blk_nums[i]
+            self.middles.append(
+                nn.Sequential(
+                    *[
+                        CHASPABlock(chan, cond_chans=cond_output, drop_out_rate=drop_out_rate)
+                        for _ in range(num)
+                    ]
+                )
+            )
+            
 
-        self.middle_blks = nn.Sequential(
-            *[
-                CHASPABlock(chan, cond_chans=cond_output, drop_out_rate=drop_out_rate)
-                for _ in range(middle_blk_num)
-            ]
-        )
 
         for i in range(len(dec_blk_nums)):
             num = dec_blk_nums[i]
@@ -433,14 +438,16 @@ class CHASPA_light(nn.Module):
         x = self.intro(inp)
         intro = x
         encs = []
-        for encoder, down in zip(self.encoders, self.downs):
+        mids = []
+        for encoder, down, middles in zip(self.encoders, self.downs, self.middles):
             x = encoder((x, cond))[0]
             encs.append(x)
             x = down(x)
+            mids.append(middles((x, cond))[0])
 
-        x = self.middle_blks((x, cond))[0]
 
-        for decoder, up, enc_skip in zip(self.decoders, self.ups, encs[::-1]):
+        for decoder, up, enc_skip, mid_skip in zip(self.decoders, self.ups, encs[::-1], mids[::-1]):
+            x = x + mid_skip
             x = up(x)
             x = x + enc_skip
             x = decoder((x, cond))[0]
