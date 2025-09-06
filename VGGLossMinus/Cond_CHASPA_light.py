@@ -118,6 +118,19 @@ class ConditionedChannelAttention(nn.Module):
         ca = self.mlp(cat_channels).permute(0, 3, 1, 2)
 
         return ca 
+    
+
+class ConditionedChannelAttentionWrapper(nn.Module):
+    def __init__(self, dims, cat_dims):
+        super().__init__()
+        self.CCAW = ConditionedChannelAttention(dims, cat_dims)
+
+    def forward(self, input):
+        inp = input[0]
+        cond = input[1]
+        x = self.CCAW(inp, cond)
+        return (inp * x, cond)
+
 
 class NKA(nn.Module):
     def __init__(self, dim, channel_reduction = 8):
@@ -251,27 +264,6 @@ class CHASPABlock(nn.Module):
 
         return (y + x * self.gamma, cond)
     
-        inp = input[0]
-        cond = input[1]
-
-        x = inp
-        x = self.norm1(x)
-
-        # Channel Mixing
-        x = self.conv2(x)
-        x = self.sg(x)
-        x = x * self.sca(x, cond)
-        x = self.conv3(x)
-        x = self.dropout2(x)
-        y = inp + x * self.beta
-
-        #Spatial Mixing
-        x = self.LKA(self.norm2(y))
-        x = self.conv1(x)
-        x = self.dropout1(x)
-        
-
-        return (y + x * self.gamma, cond)
 
 class Fuser(nn.Module):
     def __init__(self, chan):
