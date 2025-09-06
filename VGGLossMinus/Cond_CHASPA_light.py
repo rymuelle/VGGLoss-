@@ -373,7 +373,7 @@ class CHASPA_light(nn.Module):
 
 
         for i in range(len(dec_blk_nums)):
-            num = dec_blk_nums[i]
+            num = dec_blk_nums[::-1][i]
             self.ups.append(
                 nn.Sequential(
                     nn.Conv2d(chan, chan * 2, 1, bias=False), nn.PixelShuffle(2)
@@ -403,28 +403,19 @@ class CHASPA_light(nn.Module):
 
         x = self.intro(inp)
 
-        if len(self.middles[0]) > 0:
-            intro = self.middles[0]((x, cond))[0]
-        else:
-            intro = x
-
-        encs = []
         mids = []
-        for encoder, down, middles in zip(self.encoders, self.downs, self.middles[1:]):
+        for encoder, down, middles in zip(self.encoders, self.downs, self.middles[:-1]):
             x = encoder((x, cond))[0]
-            encs.append(x)
-            x = down(x)
             mids.append(middles((x, cond))[0])
+            x = down(x)
+        
+        x = self.middles[-1]((x, cond))[0]
 
-
-        for decoder, fuser, up, enc_skip, mid_skip in zip(self.decoders, self.fusers, self.ups, encs[::-1], mids[::-1]):
-            x = x + mid_skip
+        for decoder, fuser, up, mid_skip in zip(self.decoders, self.fusers, self.ups, mids[::-1]):
             x = up(x)
-            x = fuser(x, enc_skip)
-            #x = x + enc_skip
+            x = fuser(x, mid_skip)
             x = decoder((x, cond))[0]
 
-        x = x + intro
         x = self.ending(x)
     
         return x[:, :, :H, :W]
