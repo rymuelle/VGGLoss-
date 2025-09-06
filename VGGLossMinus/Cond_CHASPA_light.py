@@ -380,6 +380,17 @@ class CHASPA_light(nn.Module):
         self.downs = nn.ModuleList()
 
         chan = width
+        # Bottle Neck Blocks
+        num = mid_blk_nums[0]
+        self.middles.append(
+            nn.Sequential(
+                *[
+                    CHASPABlock(chan, cond_chans=cond_output, drop_out_rate=drop_out_rate)
+                    for _ in range(num)
+                ]
+            )
+        )
+        
         # for num in enc_blk_nums:
         for i in range(len(enc_blk_nums)):
             num = enc_blk_nums[i]
@@ -395,7 +406,7 @@ class CHASPA_light(nn.Module):
             self.downs.append(nn.Conv2d(chan, 2 * chan, 2, 2))
             chan = chan * 2
             # Bottle Neck Blocks
-            num = mid_blk_nums[i]
+            num = mid_blk_nums[i+1]
             self.middles.append(
                 nn.Sequential(
                     *[
@@ -436,10 +447,15 @@ class CHASPA_light(nn.Module):
         inp = self.check_image_size(inp)
 
         x = self.intro(inp)
-        intro = x
+
+        if len(self.middles[0]) > 0:
+            intro = self.middles[0]((x, cond))[0]
+        else:
+            intro = x
+
         encs = []
         mids = []
-        for encoder, down, middles in zip(self.encoders, self.downs, self.middles):
+        for encoder, down, middles in zip(self.encoders, self.downs, self.middles[1:]):
             x = encoder((x, cond))[0]
             encs.append(x)
             x = down(x)
