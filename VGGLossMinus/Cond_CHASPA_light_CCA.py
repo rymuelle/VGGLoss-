@@ -124,7 +124,6 @@ class ConditionedChannelAttentionWrapper(nn.Module):
     def __init__(self, dims, cat_dims):
         super().__init__()
         self.CCAW = ConditionedChannelAttention(dims, cat_dims)
-
     def forward(self, input):
         inp = input[0]
         cond = input[1]
@@ -269,10 +268,12 @@ class Fuser(nn.Module):
     def __init__(self, chan):
         super().__init__()
         self.pwconv = nn.Conv2d(chan * 2, chan * 2, 1, 1, 0)
+        #self.NKA = NKA(chan * 2)
         self.sg = SimpleGate()
     def forward(self, x1, x2):
         x = torch.cat([x1, x2], dim=1)
         x = self.pwconv(x)
+        #x = self.NKA(x)
         x = self.sg(x)
         return x
 
