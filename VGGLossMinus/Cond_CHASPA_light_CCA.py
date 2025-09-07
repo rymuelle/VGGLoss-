@@ -137,10 +137,10 @@ class NKA(nn.Module):
 
         reduced_channels = dim // channel_reduction
         self.proj_1 = nn.Conv2d(dim, reduced_channels, 1, 1, 0)
-        self.dwconv = nn.Conv2d(reduced_channels, reduced_channels * 4, 3, 1, 1, groups=reduced_channels)
-        self.proj_2 = nn.Conv2d(reduced_channels * 4, reduced_channels * 4, 1, 1, 0)
+        self.dwconv = nn.Conv2d(reduced_channels, reduced_channels, 3, 1, 1, groups=reduced_channels)
+        self.proj_2 = nn.Conv2d(reduced_channels, reduced_channels * 2, 1, 1, 0)
         self.sg = SimpleGate()
-        self.attention = nn.Conv2d(reduced_channels * 2, dim, 1, 1, 0)
+        self.attention = nn.Conv2d(reduced_channels, dim, 1, 1, 0)
         
     def forward(self, x):
         B, C, H, W = x.shape
@@ -162,8 +162,8 @@ class LKA(nn.Module):
 
         reduced_channels = dim // channel_reduction
         self.proj_1 = nn.Conv2d(dim, reduced_channels, 1, 1, 0)
-        self.dwconv = nn.Conv2d(reduced_channels, 2 * reduced_channels, 7, 1, 3, groups=reduced_channels)
-        self.proj_2 = nn.Conv2d(2 * reduced_channels, 2 * reduced_channels, 1, 1, 0)
+        self.dwconv = nn.Conv2d(reduced_channels, reduced_channels, 7, 1, 3, groups=reduced_channels)
+        self.proj_2 = nn.Conv2d(reduced_channels, reduced_channels * 2, 1, 1, 0)
         self.sg = SimpleGate()
         self.attention = nn.Conv2d(reduced_channels, dim, 1, 1, 0)
         
@@ -180,6 +180,7 @@ class LKA(nn.Module):
         # Apply attention map
         out = x * self.attention(attn)
         return out
+
 
 
 
