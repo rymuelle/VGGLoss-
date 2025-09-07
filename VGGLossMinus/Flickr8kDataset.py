@@ -58,7 +58,7 @@ class Flickr8kDataset(Dataset):
     
 
     def compute_noise_level(self):
-        rand = random.random() 
+        rand = np.random.random()
         return self.max_noise * rand + self.min_noise
     
     def compute_conditioning(self):
