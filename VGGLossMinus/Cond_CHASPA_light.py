@@ -275,6 +275,18 @@ class Fuser(nn.Module):
         x = self.pwconv(x)
         x = self.sg(x)
         return x
+    
+class GELUWrapper(nn.Module):
+    def __init__(self, channels):
+        super().__init__()
+        self.activation = nn.GELU()
+        self.beta = nn.Parameter(torch.zeros((1, channels, 1, 1)), requires_grad=True)
+
+    def forward(self, input):
+        inp = input[0]
+        cond = input[1]
+        x = self.activation(inp)
+        return (inp + self.beta * x, cond)
 
 class CHASPA_light(nn.Module):
     def __init__(
@@ -340,7 +352,7 @@ class CHASPA_light(nn.Module):
         for i in range(len(enc_blk_nums)):
             num = enc_blk_nums[i]
             self.encoders.append(
-                nn.Sequential( nn.GELU(),
+                nn.Sequential( GELUWrapper(chan),
                     *[
                         CHASPABlock(chan, cond_chans=cond_output, drop_out_rate=drop_out_rate)
                         for _ in range(num)
