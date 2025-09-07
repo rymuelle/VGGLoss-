@@ -15,6 +15,7 @@ class Flickr8kDataset(Dataset):
         self.annotations = []
         self.images = os.listdir(self.image_dir)
         self.max_noise=0.1
+        self.min_noise=0.0
 
     def get_data(self, dataset="adityajn105/flickr8k"):
         path = kagglehub.dataset_download(dataset)
@@ -57,7 +58,8 @@ class Flickr8kDataset(Dataset):
     
 
     def compute_noise_level(self):
-        return self.max_noise
+        rand = random.random() 
+        return self.max_noise * rand + self.min_noise
     
     def compute_conditioning(self):
         noise = self.compute_noise_level()
