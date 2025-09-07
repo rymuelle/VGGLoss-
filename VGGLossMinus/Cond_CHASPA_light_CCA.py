@@ -153,7 +153,7 @@ class NKA(nn.Module):
         # Non-linearity
         attn = self.sg(attn)
         # Apply attention map
-        out = x * self.attention(attn)
+        out = self.attention(attn)
         return out
 
 class LKA(nn.Module):
