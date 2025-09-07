@@ -340,7 +340,7 @@ class CHASPA_light(nn.Module):
         for i in range(len(enc_blk_nums)):
             num = enc_blk_nums[i]
             self.encoders.append(
-                nn.Sequential(
+                nn.Sequential( nn.GELU(),
                     *[
                         CHASPABlock(chan, cond_chans=cond_output, drop_out_rate=drop_out_rate)
                         for _ in range(num)
