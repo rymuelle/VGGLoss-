@@ -128,7 +128,7 @@ class ConditionedChannelAttentionWrapper(nn.Module):
         inp = input[0]
         cond = input[1]
         x = self.CCAW(inp, cond)
-        return (inp * x, cond)
+        return (inp * (1 + x), cond)
 
 
 class NKA(nn.Module):
