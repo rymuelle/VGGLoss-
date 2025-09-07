@@ -124,12 +124,11 @@ class ConditionedChannelAttentionWrapper(nn.Module):
     def __init__(self, dims, cat_dims):
         super().__init__()
         self.CCAW = ConditionedChannelAttention(dims, cat_dims)
-        self.beta = nn.Parameter(torch.zeros(1), requires_grad=True)
     def forward(self, input):
         inp = input[0]
         cond = input[1]
         x = self.CCAW(inp, cond)
-        return (inp * (1 + self.beta * x), cond)
+        return (inp * (1 + x), cond)
 
 
 class NKA(nn.Module):
