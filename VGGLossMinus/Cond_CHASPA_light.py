@@ -281,12 +281,10 @@ class GELUWrapper(nn.Module):
         super().__init__()
         self.activation = nn.GELU()
         self.beta = nn.Parameter(torch.zeros((1, channels, 1, 1)), requires_grad=True)
-        self.NKA = NKA(channels)
 
     def forward(self, input):
         inp = input[0]
         cond = input[1]
-        x = self.NKA(inp)
         x = self.activation(x)
         return (inp + self.beta * x, cond)
 
@@ -354,7 +352,7 @@ class CHASPA_light(nn.Module):
         for i in range(len(enc_blk_nums)):
             num = enc_blk_nums[i]
             self.encoders.append(
-                nn.Sequential( GELUWrapper(chan),
+                nn.Sequential(
                     *[
                         CHASPABlock(chan, cond_chans=cond_output, drop_out_rate=drop_out_rate)
                         for _ in range(num)
